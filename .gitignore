@@ -2,9 +2,9 @@
 .env
 
 # ─── Project data folders ──────────────────────────────────────────────────────
-#input/
-#output/
-#logs/
+input/
+output/
+logs/
 
 # ─── Python cache (all levels) ─────────────────────────────────────────────────
 __pycache__/
