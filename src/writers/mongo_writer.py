@@ -4,13 +4,15 @@ src/writers/mongo_writer.py
 Writes data to a MongoDB collection.
 
 Supports two modes:
-  - dict   → inserts/replaces a single document (used by Global Attributes)
-  - list   → drops the collection and inserts all documents fresh (used by Regional Attributes)
+  - dict   → upserts a single document (Global Attributes)
+  - list   → upserts by key or full refresh (Regional / Network Elements)
 
-The list strategy (drop + insert_many) is intentional: regional data is
-always written as a complete dataset, so replacing individual documents
-by region would require an extra filter key. A full refresh is simpler,
-faster, and keeps the collection consistent with the Excel at all times.
+Empty data is handled gracefully:
+  - Empty dict  → skipped, collection untouched
+  - Empty list  → skipped, collection untouched
+
+MongoDB writes can be disabled entirely via MONGODB_ENABLED=false in .env,
+in which case this module logs a notice and returns immediately.
 """
 
 from pymongo import MongoClient
@@ -21,12 +23,6 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-def _get_collection(client: MongoClient, collection_name: str):
-    """Returns a MongoDB collection object from the configured database."""
-    return client[config.MONGO_DB_NAME][collection_name]
-
-
 def write_to_mongo(
     data: dict | list[dict],
     collection_name: str,
@@ -35,17 +31,21 @@ def write_to_mongo(
     """
     Writes data to a MongoDB collection.
 
+    Skips execution entirely if:
+      - MONGODB_ENABLED is false in .env
+      - data is an empty dict or empty list
+
     If data is a dict:
-        Replaces the single existing document in the collection (upsert).
-        Idempotent — running twice does not create duplicates.
+        Upserts a single document (replaces existing or inserts new).
 
     If data is a list of dicts:
-        If upsert_key is provided: upserts each document individually by that key.
-        If upsert_key is None: drops the collection and re-inserts all documents.
+        If upsert_key provided: upserts each document by that key.
+        If upsert_key is None: drops collection and re-inserts all documents.
 
     Args:
-        data:            A dict (single document) or list of dicts (multiple documents).
-        collection_name: Name of the target MongoDB collection.
+        data:            A dict or list of dicts to write.
+        collection_name: Target MongoDB collection name.
+        upsert_key:      Field to use as upsert key for list writes.
 
     Raises:
         ConnectionFailure: If MongoDB is unreachable.
@@ -54,6 +54,18 @@ def write_to_mongo(
     """
     if not isinstance(data, (dict, list)):
         raise TypeError(f"data must be dict or list, got {type(data).__name__}")
+
+    # respect MONGODB_ENABLED flag
+    if not config.MONGODB_ENABLED:
+        logger.info(f"MongoDB disabled — skipping write to '{collection_name}'.")
+        return
+
+    # skip empty data gracefully
+    if not data:
+        logger.warning(
+            f"Data for '{collection_name}' is empty — skipping MongoDB write."
+        )
+        return
 
     logger.info(f"Connecting to MongoDB at {config.MONGO_URI} ...")
 
@@ -80,6 +92,11 @@ def write_to_mongo(
         client.close()
 
 
+def _get_collection(client: MongoClient, collection_name: str):
+    """Returns a MongoDB collection object from the configured database."""
+    return client[config.MONGO_DB_NAME][collection_name]
+
+
 def _write_single(collection, data: dict, collection_name: str) -> None:
     """Upserts a single document, replacing whatever is currently in the collection."""
     result = collection.replace_one(
@@ -93,7 +110,12 @@ def _write_single(collection, data: dict, collection_name: str) -> None:
         logger.info(f"Existing document replaced in '{collection_name}'.")
 
 
-def _write_many(collection, data: list[dict], collection_name: str, upsert_key: str | None = None) -> None:
+def _write_many(
+    collection,
+    data: list[dict],
+    collection_name: str,
+    upsert_key: str | None = None,
+) -> None:
     """
     If upsert_key is given: upserts each document by that key (e.g. 'Node_Name').
     Otherwise: drops the collection and re-inserts all documents fresh.
@@ -104,7 +126,9 @@ def _write_many(collection, data: list[dict], collection_name: str, upsert_key: 
         for doc in data:
             key_value = doc.get(upsert_key)
             if key_value is None:
-                logger.warning(f"Document missing upsert_key '{upsert_key}' — skipped: {doc}")
+                logger.warning(
+                    f"Document missing upsert_key '{upsert_key}' — skipped: {doc}"
+                )
                 continue
             result = collection.replace_one(
                 filter={upsert_key: key_value},
@@ -116,7 +140,8 @@ def _write_many(collection, data: list[dict], collection_name: str, upsert_key: 
             else:
                 replaced += 1
         logger.info(
-            f"'{collection_name}': {upserted} inserted, {replaced} replaced (upsert by '{upsert_key}')."
+            f"'{collection_name}': {upserted} inserted, {replaced} replaced "
+            f"(upsert by '{upsert_key}')."
         )
     else:
         collection.drop()

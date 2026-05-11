@@ -37,6 +37,7 @@ _default_db = f"database_{_dt.now().strftime('%Y%m%d_%H%M%S')}"
 
 MONGO_URI                    = f"mongodb://{_host}:{_port}"
 MONGO_DB_NAME                = os.getenv("MONGODB_DATABASE", _default_db)
+MONGODB_ENABLED              = os.getenv("MONGODB_ENABLED", "false").strip().lower() == "true"
 MONGO_COLLECTION_GLOBAL      = os.getenv("MONGO_COLLECTION_GLOBAL",   "global_attributes")
 MONGO_COLLECTION_REGIONAL    = os.getenv("MONGO_COLLECTION_REGIONAL", "regional_attributes")
 MONGO_COLLECTION_NETWORK     = os.getenv("MONGO_COLLECTION_NETWORK",  "network_elements")
