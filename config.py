@@ -58,3 +58,4 @@ LABEL_REGIONAL_END    = "Continue as needed"
 # Only BOOLEAN is cast natively; everything else is coerced to str.
 DTYPE_BOOLEAN = "Boolean"
 DTYPE_LIST    = "List"
+DTYPE_DICT    = "Dictionary"
