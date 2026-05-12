@@ -57,3 +57,4 @@ LABEL_REGIONAL_END    = "Continue as needed"
 # ─── Data type constants ───────────────────────────────────────────────────────
 # Only BOOLEAN is cast natively; everything else is coerced to str.
 DTYPE_BOOLEAN = "Boolean"
+DTYPE_LIST    = "List"

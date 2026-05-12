@@ -8,8 +8,8 @@ Handles merged cells, label searching, and data type casting.
 from typing import Any, Optional, Tuple
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
-
-from config import DTYPE_BOOLEAN
+import json
+from config import DTYPE_BOOLEAN, DTYPE_LIST
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -124,6 +124,10 @@ def cast_value(value: Any, data_type: str) -> Any:
     if data_type.strip() == DTYPE_BOOLEAN:
         return cleaned.lower() in ("true", "1", "yes")
 
+    # Try parse as list if value starts with '['
+    if data_type.strip() == DTYPE_LIST:
+        return _parse_informal_list(cleaned)
+
     return cleaned
 
 
@@ -155,3 +159,28 @@ def cast_bool_aware(value: Any) -> Any:
 
     # Not a boolean — return original value stripped of outer whitespace only
     return str(value).strip()
+
+def _parse_informal_list(raw: str) -> list:
+    """
+    Parses an informal list string like:
+        [a, b, "c,d", e]
+        [a,\n b,\n c]
+
+    Rules:
+    - Strips the outer brackets
+    - Removes newlines and extra whitespace
+    - Respects quoted elements (e.g. "BACKUP,TASKS" → one element)
+    - Returns a list of stripped strings
+    """
+    import csv
+    import io
+
+    # Remove outer brackets and normalize newlines/whitespace
+    inner = raw.strip()[1:-1]
+    inner = " ".join(inner.splitlines())  # colapsa saltos de línea
+
+    # Use csv.reader to respect quoted substrings
+    reader = csv.reader(io.StringIO(inner), skipinitialspace=True)
+    elements = next(reader, [])
+
+    return [el.strip() for el in elements if el.strip()]
