@@ -8,6 +8,7 @@ Values are loaded from the .env file via python-dotenv.
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import datetime as _dt
 
 load_dotenv()
 
@@ -22,18 +23,18 @@ INPUT_FILENAME = os.getenv("INPUT_FILENAME", "TMO_NPC_Voice_CIQDBInputSheet.xlsm
 INPUT_FILE     = INPUT_DIR / INPUT_FILENAME
 
 # ─── Output files ──────────────────────────────────────────────────────────────
-OUTPUT_FILENAME_GLOBAL   = os.getenv("OUTPUT_FILENAME_GLOBAL",   "global_attributes.json")
-OUTPUT_FILENAME_REGIONAL = os.getenv("OUTPUT_FILENAME_REGIONAL", "regional_attributes.json")
-OUTPUT_FILENAME_NETWORK  = os.getenv("OUTPUT_FILENAME_NETWORK",  "network_elements.json")
+_timestamp = _dt.now().strftime('%Y%m%d_%H%M%S')
+OUTPUT_FILENAME_GLOBAL   = os.getenv("OUTPUT_FILENAME_GLOBAL",   "").strip() or f"global_attributes_{_timestamp}.json"
+OUTPUT_FILENAME_REGIONAL = os.getenv("OUTPUT_FILENAME_REGIONAL", "").strip() or f"regional_attributes_{_timestamp}.json"
+OUTPUT_FILENAME_NETWORK  = os.getenv("OUTPUT_FILENAME_NETWORK",  "").strip() or f"network_elements_{_timestamp}.json"
 OUTPUT_FILE_GLOBAL       = OUTPUT_DIR / OUTPUT_FILENAME_GLOBAL
 OUTPUT_FILE_REGIONAL     = OUTPUT_DIR / OUTPUT_FILENAME_REGIONAL
 OUTPUT_FILE_NETWORK      = OUTPUT_DIR / OUTPUT_FILENAME_NETWORK
 
 # ─── MongoDB ───────────────────────────────────────────────────────────────────
-from datetime import datetime as _dt
 _host       = os.getenv("MONGODB_HOST", "127.0.0.1")
 _port       = os.getenv("MONGODB_PORT", "27017")
-_default_db = f"database_{_dt.now().strftime('%Y%m%d_%H%M%S')}"
+_default_db = f"database_{_timestamp}"
 
 MONGO_URI                    = f"mongodb://{_host}:{_port}"
 MONGO_DB_NAME                = os.getenv("MONGODB_DATABASE", _default_db)
