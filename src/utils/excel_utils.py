@@ -1,8 +1,6 @@
 """
-src/utils/excel_utils.py
-------------------------
-Helper functions for reading and parsing Excel files with openpyxl.
-Handles merged cells, label searching, and data type casting.
+Helpers for reading and parsing Excel files with openpyxl: label searching
+across merged cells and data type casting.
 """
 
 import csv
@@ -35,8 +33,8 @@ def find_label_rows(
     Scans a worksheet row by row to find the rows containing
     the start and end labels that delimit a data table.
 
-    Uses partial matching (case-insensitive) to be resilient
-    against special characters (e.g. ellipsis '…' vs '...').
+    Matching is partial and case-insensitive to stay resilient against
+    special characters (e.g. ellipsis "…" vs "...").
     """
     start_row: Optional[int] = None
     end_row:   Optional[int] = None
@@ -83,13 +81,13 @@ def cast_value(value: Any, data_type: str) -> Any:
     """
     Casts a cell value according to the Data Type column rules:
 
-    - Boolean    → Python bool
-    - List       → Python list  (parsed via _parse_informal_list)
-    - Dictionary → Python dict  (parsed via _parse_informal_dict)
-    - Anything else → str
+    - Boolean becomes a Python bool.
+    - List becomes a Python list (parsed via _parse_informal_list).
+    - Dictionary becomes a Python dict (parsed via _parse_informal_dict).
+    - Anything else becomes a str.
 
-    Numbers inside List/Dictionary are always cast to str.
-    Booleans inside List/Dictionary are cast to Python bool.
+    Within a List or Dictionary, numbers are always kept as strings while
+    booleans are cast to Python bool.
     """
     if value is None:
         return None
@@ -107,7 +105,7 @@ def cast_value(value: Any, data_type: str) -> Any:
         result = _parse_informal_dict(cleaned)
         if result is None:
             logger.warning(
-                f"Could not parse Dictionary value — stored as string: {cleaned!r}"
+                f"Could not parse Dictionary value; stored as string: {cleaned!r}"
             )
             return cleaned
         return result
@@ -136,76 +134,68 @@ def cast_bool_aware(value: Any) -> Any:
     return str(value).strip()
 
 
-# ── List parser ────────────────────────────────────────────────────────────────
-
 def _parse_informal_list(raw: str) -> list:
     """
     Parses an informal list string into a Python list.
 
     Handles:
-      - Optional outer brackets [ ]
-      - Newlines and extra whitespace
-      - Quoted elements that contain commas: "a,b" → one element
-      - Each element cast with _cast_scalar (bool-aware, numbers → str)
+      - Optional outer brackets [ ].
+      - Newlines and extra whitespace.
+      - Quoted elements that contain commas, kept as a single element
+        (e.g. "a,b").
+      - Each element is cast with _cast_scalar (bool-aware, numbers as str).
 
     Examples:
-      [a, b, "c,d"]          → ["a", "b", "c,d"]
-      [a,\\n b,\\n c]         → ["a", "b", "c"]
-      [1, 2, true]           → ["1", "2", True]
+      '[a, b, "c,d"]' yields ["a", "b", "c,d"]
+      '[a, b, c]'     yields ["a", "b", "c"]
+      '[1, 2, true]'  yields ["1", "2", True]
     """
-    # Strip outer brackets if present
     stripped = raw.strip()
     if stripped.startswith("[") and stripped.endswith("]"):
         stripped = stripped[1:-1]
 
-    # Collapse newlines and normalize whitespace
     normalized = " ".join(stripped.splitlines())
 
-    # Use csv.reader to respect quoted substrings containing commas
-    reader   = csv.reader(io.StringIO(normalized), skipinitialspace=True)
+    # csv.reader respects quoted substrings that contain commas.
+    reader = csv.reader(io.StringIO(normalized), skipinitialspace=True)
     elements = next(reader, [])
 
     return [_cast_scalar(el.strip()) for el in elements if el.strip()]
 
-
-# ── Dict parser ────────────────────────────────────────────────────────────────
 
 def _parse_informal_dict(raw: str) -> dict | None:
     """
     Parses an informal dict/JSON string into a Python dict.
 
     Handles:
-      - Standard JSON (with or without quotes on keys/values)
-      - Newlines and extra whitespace
-      - Unquoted string values (including those with spaces):
-            "key": some value with spaces  → {"key": "some value with spaces"}
-      - Unquoted keys:
-            key: "value"                   → {"key": "value"}
-      - Nested dicts and lists (recursively parsed)
-      - Numbers → always str
-      - Booleans → Python bool
-      - Missing commas or structural typos → returns None (logged as WARNING)
+      - Standard JSON (with or without quotes on keys/values).
+      - Newlines and extra whitespace.
+      - Unquoted string values, including those with spaces, so
+        '"key": some value with spaces' yields {"key": "some value with spaces"}.
+      - Unquoted keys, so 'key: "value"' yields {"key": "value"}.
+      - Nested dicts and lists, parsed recursively.
+      - Numbers, always kept as strings.
+      - Booleans, cast to Python bool.
+
+    Missing commas or structural typos cause the function to return None and
+    log a warning.
 
     Returns:
       Parsed dict, or None if the structure is invalid.
     """
-    # Collapse newlines and normalize whitespace
     normalized = " ".join(raw.strip().splitlines()).strip()
 
-    # Must be wrapped in { }
     if not (normalized.startswith("{") and normalized.endswith("}")):
         return None
 
     try:
         tokens = _tokenize(normalized)
-        result, pos = _parse_dict_tokens(tokens, 0)
+        result, _ = _parse_dict_tokens(tokens, 0)
         return result
     except Exception as exc:
         logger.warning(f"Dict parse error ({exc}): {raw!r}")
         return None
 
-
-# ── Tokenizer ──────────────────────────────────────────────────────────────────
 
 def _tokenize(text: str) -> list[str]:
     """
@@ -233,7 +223,7 @@ def _tokenize(text: str) -> list[str]:
             continue
 
         if ch == '"':
-            # Quoted string — read until closing unescaped "
+            # Quoted string: read until the closing unescaped quote.
             j = i + 1
             while j < n:
                 if text[j] == '\\':
@@ -242,11 +232,11 @@ def _tokenize(text: str) -> list[str]:
                 if text[j] == '"':
                     break
                 j += 1
-            tokens.append(text[i:j + 1])   # includes surrounding quotes
+            tokens.append(text[i:j + 1])  # includes the surrounding quotes
             i = j + 1
             continue
 
-        # Unquoted token — read until structural char
+        # Unquoted token: read until the next structural character.
         j = i
         while j < n and text[j] not in '{}[],:"\t\r\n':
             j += 1
@@ -258,8 +248,6 @@ def _tokenize(text: str) -> list[str]:
     return tokens
 
 
-# ── Recursive token parsers ────────────────────────────────────────────────────
-
 def _parse_dict_tokens(tokens: list[str], pos: int) -> tuple[dict, int]:
     """
     Parses a dict starting at tokens[pos] (which must be '{').
@@ -270,25 +258,20 @@ def _parse_dict_tokens(tokens: list[str], pos: int) -> tuple[dict, int]:
     result = {}
 
     while pos < len(tokens) and tokens[pos] != '}':
-        # ── Parse key ──────────────────────────────────────────────────────────
-        key_token = tokens[pos]
+        key = _unquote(tokens[pos])
         pos += 1
-        key = _unquote(key_token)
 
-        # Expect ':'
         if pos >= len(tokens) or tokens[pos] != ':':
-            raise ValueError(f"Expected ':' after key {key!r}, got {tokens[pos] if pos < len(tokens) else 'EOF'!r}")
+            got = tokens[pos] if pos < len(tokens) else "EOF"
+            raise ValueError(f"Expected ':' after key {key!r}, got {got!r}")
         pos += 1
 
-        # ── Parse value ────────────────────────────────────────────────────────
         value, pos = _parse_value_tokens(tokens, pos)
         result[key] = value
 
-        # Optional comma
         if pos < len(tokens) and tokens[pos] == ',':
             pos += 1
 
-    # Consume closing '}'
     if pos < len(tokens) and tokens[pos] == '}':
         pos += 1
 
@@ -308,11 +291,9 @@ def _parse_list_tokens(tokens: list[str], pos: int) -> tuple[list, int]:
         value, pos = _parse_value_tokens(tokens, pos)
         result.append(value)
 
-        # Optional comma
         if pos < len(tokens) and tokens[pos] == ',':
             pos += 1
 
-    # Consume closing ']'
     if pos < len(tokens) and tokens[pos] == ']':
         pos += 1
 
@@ -339,10 +320,9 @@ def _parse_value_tokens(tokens: list[str], pos: int) -> tuple[Any, int]:
         return _parse_list_tokens(tokens, pos)
 
     if token.startswith('"'):
-        # Quoted string — strip quotes and cast
         return _cast_scalar(_unquote(token)), pos + 1
 
-    # Unquoted scalar — may span multiple words until next structural char
+    # An unquoted scalar may span several words up to the next structural char.
     parts = []
     while pos < len(tokens) and tokens[pos] not in ('{', '}', '[', ']', ',', ':'):
         parts.append(tokens[pos])
@@ -351,14 +331,11 @@ def _parse_value_tokens(tokens: list[str], pos: int) -> tuple[Any, int]:
     return _cast_scalar(" ".join(parts)), pos
 
 
-# ── Scalar caster ──────────────────────────────────────────────────────────────
-
 def _cast_scalar(value: str) -> Any:
     """
-    Casts a scalar string value:
-      - 'true' / 'false' (any case) → Python bool
-      - Numbers (int or float)      → str  (never numeric)
-      - Anything else               → str  (stripped)
+    Casts a scalar string value: "true"/"false" (any case) become a Python
+    bool, and everything else (including numbers) is returned as a stripped
+    string. Numbers are deliberately never cast to int or float.
     """
     stripped = value.strip()
 
@@ -367,10 +344,10 @@ def _cast_scalar(value: str) -> Any:
     if stripped.lower() == "false":
         return False
 
-    # Numbers → str (do not cast to int/float)
+    # Keep numbers as strings rather than casting them.
     try:
         float(stripped)
-        return stripped   # it's a number — return as string
+        return stripped
     except ValueError:
         pass
 

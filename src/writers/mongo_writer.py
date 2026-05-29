@@ -1,18 +1,12 @@
 """
-src/writers/mongo_writer.py
-----------------------------
-Writes data to a MongoDB collection.
+Writes pipeline data to a MongoDB collection.
 
-Supports two modes:
-  - dict   → upserts a single document (Global Attributes)
-  - list   → upserts by key or full refresh (Regional / Network Elements)
+A dict upserts a single document (Global Attributes); a list either upserts
+each document by a key or fully refreshes the collection (Regional / Network
+Elements). Empty data leaves the collection untouched.
 
-Empty data is handled gracefully:
-  - Empty dict  → skipped, collection untouched
-  - Empty list  → skipped, collection untouched
-
-MongoDB writes can be disabled entirely via MONGODB_ENABLED=false in .env,
-in which case this module logs a notice and returns immediately.
+Writes can be disabled entirely with MONGODB_ENABLED=false in .env, in which
+case this module logs a notice and returns immediately.
 """
 
 from pymongo import MongoClient
@@ -55,15 +49,13 @@ def write_to_mongo(
     if not isinstance(data, (dict, list)):
         raise TypeError(f"data must be dict or list, got {type(data).__name__}")
 
-    # respect MONGODB_ENABLED flag
     if not config.MONGODB_ENABLED:
-        logger.info(f"MongoDB disabled — skipping write to '{collection_name}'.")
+        logger.info(f"MongoDB disabled; skipping write to '{collection_name}'.")
         return
 
-    # skip empty data gracefully
     if not data:
         logger.warning(
-            f"Data for '{collection_name}' is empty — skipping MongoDB write."
+            f"Data for '{collection_name}' is empty; skipping MongoDB write."
         )
         return
 
@@ -127,7 +119,7 @@ def _write_many(
             key_value = doc.get(upsert_key)
             if key_value is None:
                 logger.warning(
-                    f"Document missing upsert_key '{upsert_key}' — skipped: {doc}"
+                    f"Document missing upsert_key '{upsert_key}'; skipped: {doc}"
                 )
                 continue
             result = collection.replace_one(

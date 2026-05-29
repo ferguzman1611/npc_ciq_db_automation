@@ -1,13 +1,11 @@
 """
-main.py
--------
-Entry point for the CIQ Reader pipeline.
+Entry point for the CIQ pipeline.
 
 Usage:
-    python main.py --global              # runs only Global Attributes
-    python main.py --regional            # runs only Regional Attributes
-    python main.py --global --regional   # runs both
-    python main.py                       # runs all (default)
+    python main.py --global              # Global Attributes only
+    python main.py --regional            # Regional Attributes only
+    python main.py --global --regional   # both
+    python main.py                       # all pipelines (default)
 """
 
 import argparse
@@ -25,47 +23,35 @@ logger = get_logger(__name__)
 
 
 def run_global_attributes() -> None:
-    """Executes the full pipeline for the Global Attributes sheet."""
-    logger.info("─" * 60)
-    logger.info("START: Global Attributes pipeline")
-    logger.info("─" * 60)
-
+    """Runs the full pipeline for the Global Attributes sheet."""
+    logger.info("Starting Global Attributes pipeline")
     data = read_global_attributes()
     write_json(data, config.OUTPUT_FILE_GLOBAL)
     write_to_mongo(data, config.MONGO_COLLECTION_GLOBAL)
-
-    logger.info("END: Global Attributes pipeline — completed successfully.")
+    logger.info("Global Attributes pipeline completed")
 
 
 def run_regional_attributes() -> None:
-    """Executes the full pipeline for the Regional Attributes sheet."""
-    logger.info("─" * 60)
-    logger.info("START: Regional Attributes pipeline")
-    logger.info("─" * 60)
-
+    """Runs the full pipeline for the Regional Attributes sheet."""
+    logger.info("Starting Regional Attributes pipeline")
     data = read_regional_attributes()
     write_json(data, config.OUTPUT_FILE_REGIONAL)
     write_to_mongo(data, config.MONGO_COLLECTION_REGIONAL)
-
-    logger.info("END: Regional Attributes pipeline — completed successfully.")
-
+    logger.info("Regional Attributes pipeline completed")
 
 
 def run_network_elements() -> None:
-    """Executes the full pipeline for all *-InputTable sheets."""
-    logger.info("─" * 60)
-    logger.info("START: Network Elements pipeline")
-    logger.info("─" * 60)
-
+    """Runs the full pipeline for all *-InputTable sheets."""
+    logger.info("Starting Network Elements pipeline")
     data = read_network_elements()
     write_json(data, config.OUTPUT_FILE_NETWORK)
     write_to_mongo(data, config.MONGO_COLLECTION_NETWORK, upsert_key="Node_Name")
+    logger.info("Network Elements pipeline completed")
 
-    logger.info("END: Network Elements pipeline — completed successfully.")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CIQ Reader — parses CIQ Excel sheets and writes to JSON and MongoDB."
+        description="Parse CIQ Excel sheets and write the results to JSON and MongoDB."
     )
     parser.add_argument(
         "--global",
@@ -89,13 +75,12 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    # Ensure output folders exist at startup
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
     args = parse_args()
 
-    # If no flag is provided, run everything
+    # With no flags, run every pipeline.
     run_all = not args.run_global and not args.run_regional and not args.run_network
 
     try:

@@ -1,14 +1,9 @@
 """
-src/readers/global_reader.py
------------------------------
-Reads the 'Global Attributes' sheet from the CIQ Excel file
-and returns a clean Python dictionary {key: value}.
+Reads the 'Global Attributes' sheet and returns a dictionary {key: value}.
 
-Strategy (hybrid openpyxl):
-  1. openpyxl scans the sheet to find the start/end label rows,
-     handling merged cells transparently (value sits in anchor cell).
-  2. openpyxl iterates only the data rows between those two labels
-     to build the dictionary — no pandas needed, no positional magic.
+The sheet is scanned with openpyxl to locate the start/end label rows
+(merged cells are handled transparently, since the value lives in the
+anchor cell), then only the data rows between those labels are iterated.
 """
 
 from openpyxl.worksheet.worksheet import Worksheet
@@ -19,10 +14,10 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Column indices (0-based) within each row tuple returned by iter_rows
-_COL_KEY       = 2   # Column C  →  Key
-_COL_VALUE     = 3   # Column D  →  Value
-_COL_DATATYPE  = 4   # Column E  →  Data Type
+# Column indices (0-based) within each row tuple returned by iter_rows.
+_COL_KEY = 2       # Column C: Key
+_COL_VALUE = 3     # Column D: Value
+_COL_DATATYPE = 4  # Column E: Data Type
 
 
 def read_global_attributes() -> dict:
@@ -46,23 +41,19 @@ def read_global_attributes() -> dict:
     wb = open_workbook(str(input_file))
     ws: Worksheet = wb[config.SHEET_GLOBAL_ATTRIBUTES]
 
-    # ── Step 1: locate the table boundaries ───────────────────────────────────
     start_row, end_row = find_label_rows(
         ws,
         start_label=config.LABEL_GLOBAL_START,
         end_label=config.LABEL_GLOBAL_END,
     )
 
-    # start_row  → row with "Global attributes definition"
-    # start_row + 1 → header row (N°, Key, Value, Data Type, …)  ← skip
-    # start_row + 2 → first data row
-    # end_row - 1   → last data row
+    # The start label is followed by a header row, so the data begins two rows
+    # below it and ends on the row before the end label.
     data_start = start_row + 2
-    data_end   = end_row - 1
+    data_end = end_row - 1
 
     logger.debug(f"Data rows: {data_start} to {data_end}")
 
-    # ── Step 2: iterate data rows and build the dict ───────────────────────────
     result: dict = {}
     skipped: int = 0
 
@@ -93,5 +84,4 @@ def read_global_attributes() -> dict:
     )
 
     wb.close()
-    #return result
     return {"commonData": result}
